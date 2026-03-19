@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from './lib/supabase'; // 引入刚才建的连接文件
+import { supabase } from './lib/supabase.ts'; // 引入刚才建的连接文件
 import { 
   Search, Plus, History, Home, Star, Pin, Trash2, X, Check,
   User, Settings, Mail, Info, LogOut, Download, RotateCcw,
