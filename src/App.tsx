@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { LogIn, Loader2 } from 'lucide-react'; 
 import { supabase } from './lib/supabase';
 import { 
   Search, 
@@ -141,6 +142,36 @@ const DrinkCard: React.FC<DrinkCardProps> = ({ drink, onLog, onToggleFavorite, o
 );
 
 export default function App() {
+    // --- Auth & Cloud States ---
+  const [session, setSession] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [loginMsg, setLoginMsg] = useState('');
+
+  // 1. 监听登录状态
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 2. 登录后从云端拉取数据（替换你原有的 LocalStorage 读取逻辑）
+  useEffect(() => {
+    if (session) {
+      const loadCloudData = async () => {
+        const { data: logData } = await supabase.from('drinks_log').select('*');
+        if (logData) setLogs(logData);
+        const { data: selfieData } = await supabase.from('selfies').select('*');
+        if (selfieData) setSelfies(selfieData);
+      };
+      loadCloudData();
+    }
+  }, [session]);
   // --- State ---
   const [drinks, setDrinks] = useState<Drink[]>([]);
   const [logs, setLogs] = useState<DrinkLog[]>([]);
@@ -381,14 +412,41 @@ export default function App() {
     const toastId = generateId();
     setToasts(prev => [...prev, { id: toastId, message: "History Exported! 📥" }]);
   };
-
-  const logDrink = (drink: Drink) => {
-    const newLog: DrinkLog = {
-      id: generateId(),
+  const logDrink = async (drink: Drink) => {
+    if (!session) return;
+    
+    // 构造发往云端的数据
+    const newCloudLog = {
       drink_id: drink.id,
-      timestamp: Date.now(),
-      session_id: currentSessionId,
+      drink_name: drink.name,
+      abv: drink.abv,
+      volume: drink.volume_ml,
+      session_id: currentSessionId
     };
+
+    const { data, error } = await supabase.from('drinks_log').insert([newCloudLog]).select();
+
+    if (!error && data) {
+      setLogs(prev => [...prev, data[0]]);
+      const toastId = generateId();
+      setToasts(prev => [...prev, { id: toastId, message: `+1 ${drink.name} (Saved)` }]);
+    }
+  };
+
+  // 登录/登出处理
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginMsg('Sending link...');
+    const { error } = await supabase.auth.signInWithOtp({ 
+      email, 
+      options: { emailRedirectTo: window.location.origin } 
+    });
+    if (error) setLoginMsg(error.message);
+    else setLoginMsg('Check your email for the link!');
+  };
+
+  const handleLogout = () => supabase.auth.signOut();
+  
     setLogs(prev => [...prev, newLog]);
     
     const toastId = generateId();
@@ -582,7 +640,32 @@ export default function App() {
                     </div>
                   );
                 } else {
-                  return (
+                    // 加载中状态
+  if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><Loader2 className="animate-spin text-neon-blue" /></div>;
+
+  // 没登录时显示登录墙
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-stone-50">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass w-full max-w-sm p-8 rounded-[2.5rem] text-center">
+          <div className="text-5xl mb-6">🍸</div>
+          <h1 className="text-3xl font-bold text-stone-800 mb-2">TIPSY</h1>
+          <p className="text-stone-400 mb-8 text-sm">Enter email to save your night</p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input type="email" placeholder="your@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required 
+              className="w-full glass rounded-2xl p-4 text-stone-800 outline-none focus:ring-1 focus:ring-neon-blue/50" />
+            <button type="submit" className="w-full bg-neon-blue text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+              <LogIn className="w-5 h-5" /> Get Magic Link
+            </button>
+          </form>
+          {loginMsg && <p className="mt-4 text-xs font-medium text-neon-pink">{loginMsg}</p>}
+        </motion.div>
+      </div>
+    );
+  }
+
+  // 只有登录了才会执行你原来的 return (...)
+  return (
                     <div key={item.id} className="glass rounded-3xl overflow-hidden shadow-sm">
                       <div className="p-4 flex items-center justify-between border-b border-stone-100">
                         <div className="flex items-center gap-4">
