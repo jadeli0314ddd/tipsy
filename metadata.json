@@ -1,0 +1,5 @@
+{
+  "name": "Tipsy - Nightlife Companion",
+  "description": "Track your drinks, monitor your BAC, and capture the night with drunk selfies. The ultimate nightlife companion.",
+  "requestFramePermissions": ["camera"]
+}

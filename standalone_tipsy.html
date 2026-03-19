@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tipsy - Alcohol Tracker</title>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide-react@latest"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        :root {
+            --neon-pink: #e11d48;
+            --neon-blue: #f59e0b;
+            --neon-green: #10b981;
+            --neon-orange: #f97316;
+        }
+
+        body {
+            background-color: #fdfbf7;
+            color: #1c1917;
+            font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            margin: 0;
+            padding: 0;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(28, 25, 23, 0.08);
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Tailwind custom colors */
+        .text-neon-pink { color: var(--neon-pink); }
+        .text-neon-blue { color: var(--neon-blue); }
+        .text-neon-green { color: var(--neon-green); }
+        .text-neon-orange { color: var(--neon-orange); }
+        .bg-neon-pink { background-color: var(--neon-pink); }
+        .bg-neon-blue { background-color: var(--neon-blue); }
+        .bg-neon-green { background-color: var(--neon-green); }
+        .bg-neon-orange { background-color: var(--neon-orange); }
+        .border-neon-pink\/30 { border-color: rgba(225, 29, 72, 0.3); }
+        .border-neon-blue\/30 { border-color: rgba(245, 158, 11, 0.3); }
+        .border-neon-blue\/20 { border-color: rgba(245, 158, 11, 0.2); }
+        .bg-neon-blue\/10 { background-color: rgba(245, 158, 11, 0.1); }
+        .bg-neon-pink\/10 { background-color: rgba(225, 29, 72, 0.1); }
+        .bg-neon-green\/10 { background-color: rgba(16, 185, 129, 0.1); }
+        .bg-neon-orange\/10 { background-color: rgba(249, 115, 22, 0.1); }
+        .shadow-neon-blue\/30 { box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.3); }
+        .shadow-neon-pink\/10 { box-shadow: 0 10px 15px -3px rgba(225, 29, 72, 0.1); }
+        .shadow-purple-500\/30 { box-shadow: 0 10px 15px -3px rgba(168, 85, 247, 0.3); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
+        const { motion, AnimatePresence } = framerMotion;
+        const { 
+            Search, Plus, History, Home, Star, Pin, Trash2, X, Check, User, 
+            Settings, Mail, Info, LogOut, Download, RotateCcw, ToggleLeft, 
+            ToggleRight, ChevronRight, Beer, Wine, GlassWater, Flame, Zap, 
+            Camera, Image: ImageIcon 
+        } = LucideReact;
+
+        // --- Constants ---
+        const DEFAULT_DRINKS = [
+            { id: 'beer', name: 'Beer', category: 'Beer', abv: 5, volume_ml: 330, alcohol_ml: 16.5, icon: '🍺', is_favorite: true, is_pinned: true },
+            { id: 'lager', name: 'Lager', category: 'Beer', abv: 5, volume_ml: 330, alcohol_ml: 16.5, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'ipa', name: 'IPA', category: 'Beer', abv: 6.5, volume_ml: 330, alcohol_ml: 21.45, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'pale-ale', name: 'Pale Ale', category: 'Beer', abv: 5.5, volume_ml: 330, alcohol_ml: 18.15, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'wheat-beer', name: 'Wheat Beer', category: 'Beer', abv: 5.2, volume_ml: 500, alcohol_ml: 26, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'stout', name: 'Stout', category: 'Beer', abv: 6, volume_ml: 440, alcohol_ml: 26.4, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'cider', name: 'Cider', category: 'Beer', abv: 4.5, volume_ml: 500, alcohol_ml: 22.5, icon: '🍎', is_favorite: false, is_pinned: false },
+            { id: 'corona', name: 'Corona', category: 'Beer', abv: 4.5, volume_ml: 330, alcohol_ml: 14.85, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'heineken', name: 'Heineken', category: 'Beer', abv: 5, volume_ml: 330, alcohol_ml: 16.5, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'guinness', name: 'Guinness', category: 'Beer', abv: 4.2, volume_ml: 440, alcohol_ml: 18.48, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'red-wine', name: 'Red Wine', category: 'Wine', abv: 13, volume_ml: 150, alcohol_ml: 19.5, icon: '🍷', is_favorite: true, is_pinned: false },
+            { id: 'white-wine', name: 'White Wine', category: 'Wine', abv: 12, volume_ml: 150, alcohol_ml: 18, icon: '🥂', is_favorite: false, is_pinned: false },
+            { id: 'rose-wine', name: 'Rosé', category: 'Wine', abv: 12, volume_ml: 150, alcohol_ml: 18, icon: '🍷', is_favorite: false, is_pinned: false },
+            { id: 'cabernet', name: 'Cabernet Sauvignon', category: 'Wine', abv: 14, volume_ml: 150, alcohol_ml: 21, icon: '🍷', is_favorite: false, is_pinned: false },
+            { id: 'chardonnay', name: 'Chardonnay', category: 'Wine', abv: 13, volume_ml: 150, alcohol_ml: 19.5, icon: '🥂', is_favorite: false, is_pinned: false },
+            { id: 'pinot-noir', name: 'Pinot Noir', category: 'Wine', abv: 13, volume_ml: 150, alcohol_ml: 19.5, icon: '🍷', is_favorite: false, is_pinned: false },
+            { id: 'sauvignon-blanc', name: 'Sauvignon Blanc', category: 'Wine', abv: 12.5, volume_ml: 150, alcohol_ml: 18.75, icon: '🥂', is_favorite: false, is_pinned: false },
+            { id: 'champagne', name: 'Champagne', category: 'Wine', abv: 12, volume_ml: 125, alcohol_ml: 15, icon: '🥂', is_favorite: false, is_pinned: false },
+            { id: 'prosecco', name: 'Prosecco', category: 'Wine', abv: 11, volume_ml: 125, alcohol_ml: 13.75, icon: '🥂', is_favorite: false, is_pinned: false },
+            { id: 'sake', name: 'Sake', category: 'Wine', abv: 15, volume_ml: 180, alcohol_ml: 27, icon: '🍶', is_favorite: false, is_pinned: false },
+            { id: 'mojito', name: 'Mojito', category: 'Cocktails', abv: 12, volume_ml: 300, alcohol_ml: 36, icon: '🍹', is_favorite: true, is_pinned: false },
+            { id: 'margarita', name: 'Margarita', category: 'Cocktails', abv: 20, volume_ml: 150, alcohol_ml: 30, icon: '🍸', is_favorite: true, is_pinned: false },
+            { id: 'martini', name: 'Martini', category: 'Cocktails', abv: 30, volume_ml: 100, alcohol_ml: 30, icon: '🍸', is_favorite: false, is_pinned: false },
+            { id: 'negroni', name: 'Negroni', category: 'Cocktails', abv: 24, volume_ml: 120, alcohol_ml: 28.8, icon: '🥃', is_favorite: false, is_pinned: false },
+            { id: 'aperol-spritz', name: 'Aperol Spritz', category: 'Cocktails', abv: 11, volume_ml: 200, alcohol_ml: 22, icon: '🍹', is_favorite: false, is_pinned: false },
+            { id: 'old-fashioned', name: 'Old Fashioned', category: 'Cocktails', abv: 32, volume_ml: 100, alcohol_ml: 32, icon: '🥃', is_favorite: false, is_pinned: false },
+            { id: 'long-island', name: 'Long Island Iced Tea', category: 'Cocktails', abv: 22, volume_ml: 300, alcohol_ml: 66, icon: '🥤', is_favorite: false, is_pinned: false },
+            { id: 'cosmopolitan', name: 'Cosmopolitan', category: 'Cocktails', abv: 15, volume_ml: 150, alcohol_ml: 22.5, icon: '🍸', is_favorite: false, is_pinned: false },
+            { id: 'whiskey-sour', name: 'Whiskey Sour', category: 'Cocktails', abv: 14, volume_ml: 150, alcohol_ml: 21, icon: '🥃', is_favorite: false, is_pinned: false },
+            { id: 'pina-colada', name: 'Pina Colada', category: 'Cocktails', abv: 13, volume_ml: 300, alcohol_ml: 39, icon: '🍍', is_favorite: false, is_pinned: false },
+            { id: 'bloody-mary', name: 'Bloody Mary', category: 'Cocktails', abv: 10, volume_ml: 300, alcohol_ml: 30, icon: '🍅', is_favorite: false, is_pinned: false },
+            { id: 'espresso-martini', name: 'Espresso Martini', category: 'Cocktails', abv: 18, volume_ml: 150, alcohol_ml: 27, icon: '☕', is_favorite: false, is_pinned: false },
+            { id: 'moscow-mule', name: 'Moscow Mule', category: 'Cocktails', abv: 11, volume_ml: 250, alcohol_ml: 27.5, icon: '🍺', is_favorite: false, is_pinned: false },
+            { id: 'daiquiri', name: 'Daiquiri', category: 'Cocktails', abv: 20, volume_ml: 120, alcohol_ml: 24, icon: '🍸', is_favorite: false, is_pinned: false },
+            { id: 'manhattan', name: 'Manhattan', category: 'Cocktails', abv: 30, volume_ml: 100, alcohol_ml: 30, icon: '🍸', is_favorite: false, is_pinned: false },
+            { id: 'whiskey', name: 'Whiskey', category: 'Spirits / Highballs', abv: 40, volume_ml: 45, alcohol_ml: 18, icon: '🥃', is_favorite: true, is_pinned: false },
+            { id: 'whiskey-soda', name: 'Whiskey Soda', category: 'Spirits / Highballs', abv: 12, volume_ml: 150, alcohol_ml: 18, icon: '🥃', is_favorite: false, is_pinned: false },
+            { id: 'vodka-soda', name: 'Vodka Soda', category: 'Spirits / Highballs', abv: 10, volume_ml: 250, alcohol_ml: 25, icon: '🥤', is_favorite: true, is_pinned: false },
+            { id: 'gin-tonic', name: 'Gin & Tonic', category: 'Spirits / Highballs', abv: 12, volume_ml: 200, alcohol_ml: 24, icon: '🍸', is_favorite: true, is_pinned: true },
+            { id: 'rum-coke', name: 'Rum & Coke', category: 'Spirits / Highballs', abv: 12, volume_ml: 200, alcohol_ml: 24, icon: '🥤', is_favorite: false, is_pinned: false },
+            { id: 'tequila', name: 'Tequila', category: 'Spirits / Highballs', abv: 40, volume_ml: 45, alcohol_ml: 18, icon: '🥃', is_favorite: false, is_pinned: false },
+            { id: 'brandy', name: 'Brandy', category: 'Spirits / Highballs', abv: 40, volume_ml: 45, alcohol_ml: 18, icon: '🥃', is_favorite: false, is_pinned: false },
+            { id: 'cognac', name: 'Cognac', category: 'Spirits / Highballs', abv: 40, volume_ml: 45, alcohol_ml: 18, icon: '🥃', is_favorite: false, is_pinned: false },
+            { id: 'vodka-tonic', name: 'Vodka Tonic', category: 'Spirits / Highballs', abv: 12, volume_ml: 200, alcohol_ml: 24, icon: '🍸', is_favorite: false, is_pinned: false },
+            { id: 'dark-stormy', name: 'Dark \'n\' Stormy', category: 'Spirits / Highballs', abv: 14, volume_ml: 200, alcohol_ml: 28, icon: '🍹', is_favorite: false, is_pinned: false },
+            { id: 'paloma', name: 'Paloma', category: 'Spirits / Highballs', abv: 12, volume_ml: 250, alcohol_ml: 30, icon: '🍹', is_favorite: false, is_pinned: false },
+            { id: 'tequila-shot', name: 'Tequila Shot', category: 'Shots', abv: 38, volume_ml: 30, alcohol_ml: 11.4, icon: '🍶', is_favorite: true, is_pinned: false },
+            { id: 'vodka-shot', name: 'Vodka Shot', category: 'Shots', abv: 40, volume_ml: 30, alcohol_ml: 12, icon: '🍶', is_favorite: false, is_pinned: false },
+            { id: 'whiskey-shot', name: 'Whiskey Shot', category: 'Shots', abv: 40, volume_ml: 30, alcohol_ml: 12, icon: '🍶', is_favorite: false, is_pinned: false },
+            { id: 'jager-shot', name: 'Jäger Shot', category: 'Shots', abv: 35, volume_ml: 30, alcohol_ml: 10.5, icon: '🍶', is_favorite: false, is_pinned: false },
+            { id: 'b52', name: 'B-52', category: 'Shots', abv: 27, volume_ml: 45, alcohol_ml: 12.15, icon: '🔥', is_favorite: false, is_pinned: false },
+            { id: 'lemon-drop', name: 'Lemon Drop', category: 'Shots', abv: 25, volume_ml: 45, alcohol_ml: 11.25, icon: '🍋', is_favorite: false, is_pinned: false },
+            { id: 'kamikaze', name: 'Kamikaze', category: 'Shots', abv: 25, volume_ml: 45, alcohol_ml: 11.25, icon: '🍶', is_favorite: false, is_pinned: false },
+            { id: 'sambuca', name: 'Sambuca', category: 'Shots', abv: 38, volume_ml: 30, alcohol_ml: 11.4, icon: '🍶', is_favorite: false, is_pinned: false },
+            { id: 'absinthe-shot', name: 'Absinthe Shot', category: 'Shots', abv: 70, volume_ml: 20, alcohol_ml: 14, icon: '🧚', is_favorite: false, is_pinned: false },
+        ];
+
+        const CATEGORIES = ['All', 'Beer', 'Wine', 'Cocktails', 'Spirits / Highballs', 'Shots', 'My Drinks'];
+
+        // --- Utils ---
+        const generateId = () => Math.random().toString(36).substring(2, 9);
+        const getSessionId = () => {
+            const now = new Date();
+            const sessionDate = new Date(now);
+            if (now.getHours() < 6) sessionDate.setDate(now.getDate() - 1);
+            return sessionDate.toISOString().split('T')[0];
+        };
+        const renderIcon = (icon) => {
+            const mapping = { 'Beer': '🍺', 'Cocktail': '🍸', 'Wine': '🍷', 'Spirit': '🥃', 'Shot': '🍶', 'Aperol': '🍹' };
+            return mapping[icon] || icon;
+        };
+
+        // --- Components ---
+        const Toast = ({ message, onComplete }) => {
+            useEffect(() => {
+                const timer = setTimeout(onComplete, 2000);
+                return () => clearTimeout(timer);
+            }, [onComplete]);
+
+            return (
+                <motion.div 
+                    initial={{ opacity: 0, y: 50 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 glass px-6 py-3 rounded-full flex items-center gap-2 border-neon-blue/20 shadow-lg text-stone-800"
+                >
+                    <Zap className="w-4 h-4 text-neon-blue" />
+                    <span className="text-sm font-medium">{message}</span>
+                </motion.div>
+            );
+        };
+
+        const DrinkCard = ({ drink, onLog, onToggleFavorite, onTogglePin, onRemove }) => (
+            <motion.div
+                layout
+                onClick={() => onLog(drink)}
+                className={`glass rounded-[2rem] p-4 flex flex-col items-center text-center gap-3 active:scale-[0.98] transition-all cursor-pointer group relative overflow-hidden ${drink.is_pinned ? 'border-neon-blue/30' : ''}`}
+            >
+                {drink.is_pinned && <div className="absolute inset-0 bg-neon-blue/5 pointer-events-none" />}
+                <div className="text-3xl w-14 h-14 flex items-center justify-center bg-stone-100 rounded-2xl group-active:scale-110 transition-transform">
+                    {renderIcon(drink.icon)}
+                </div>
+                <div className="flex-1 w-full">
+                    <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                        <h3 className="font-semibold text-base leading-tight truncate text-stone-800">{drink.name}</h3>
+                        {drink.is_pinned && <Pin className="w-2.5 h-2.5 text-neon-blue fill-neon-blue shrink-0" />}
+                    </div>
+                    <p className="text-stone-400 text-[11px] font-medium">{drink.abv}% · {drink.volume_ml}ml</p>
+                </div>
+                <div className="flex items-center justify-center gap-1 w-full">
+                    <button onClick={(e) => onToggleFavorite(drink.id, e)} className={`p-1.5 rounded-full transition-colors ${drink.is_favorite ? 'text-neon-pink' : 'text-stone-300 hover:text-stone-500'}`}>
+                        <Star className={`w-4 h-4 ${drink.is_favorite ? 'fill-neon-pink' : ''}`} />
+                    </button>
+                    <button onClick={(e) => onTogglePin(drink.id, e)} className={`p-1.5 rounded-full transition-colors ${drink.is_pinned ? 'text-neon-blue' : 'text-stone-300 hover:text-stone-500'}`}>
+                        <Pin className={`w-4 h-4 ${drink.is_pinned ? 'fill-neon-blue' : ''}`} />
+                    </button>
+                    {drink.is_custom && (
+                        <button onClick={(e) => onRemove(drink.id, e)} className="p-1.5 rounded-full text-stone-300 hover:text-red-400 transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            </motion.div>
+        );
+
+        function App() {
+            const [drinks, setDrinks] = useState([]);
+            const [logs, setLogs] = useState([]);
+            const [selfies, setSelfies] = useState([]);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [selectedCategory, setSelectedCategory] = useState('All');
+            const [activeTab, setActiveTab] = useState('home');
+            const [showAddModal, setShowAddModal] = useState(false);
+            const [showDrunkPopup, setShowDrunkPopup] = useState(false);
+            const [toasts, setToasts] = useState([]);
+            const [userProfile, setUserProfile] = useState({ 
+                username: 'Jade', email: 'jade@email.com', age: 20, weight_kg: 55, 
+                gender: 'female', tolerance_type: 'auto', manual_tolerance: 'medium', enable_selfie_reminder: true 
+            });
+
+            useEffect(() => {
+                const savedDrinks = localStorage.getItem('tipsy_drinks');
+                const savedLogs = localStorage.getItem('tipsy_logs');
+                const savedSelfies = localStorage.getItem('tipsy_selfies');
+                const savedProfile = localStorage.getItem('tipsy_profile');
+                
+                if (savedDrinks) {
+                    const parsed = JSON.parse(savedDrinks);
+                    const merged = [...parsed];
+                    DEFAULT_DRINKS.forEach(d => { if (!merged.find(m => m.id === d.id)) merged.push(d); });
+                    setDrinks(merged);
+                } else setDrinks(DEFAULT_DRINKS);
+
+                if (savedProfile) setUserProfile(JSON.parse(savedProfile));
+                if (savedLogs) {
+                    const parsed = JSON.parse(savedLogs);
+                    if (parsed.length > 0) {
+                        const last = Math.max(...parsed.map(l => l.timestamp));
+                        if (last < Date.now() - (6 * 3600000)) { setLogs([]); localStorage.removeItem('tipsy_logs'); }
+                        else setLogs(parsed);
+                    }
+                }
+                if (savedSelfies) setSelfies(JSON.parse(savedSelfies));
+            }, []);
+
+            useEffect(() => { if (drinks.length > 0) localStorage.setItem('tipsy_drinks', JSON.stringify(drinks)); }, [drinks]);
+            useEffect(() => { localStorage.setItem('tipsy_logs', JSON.stringify(logs)); }, [logs]);
+            useEffect(() => { localStorage.setItem('tipsy_selfies', JSON.stringify(selfies)); }, [selfies]);
+            useEffect(() => { localStorage.setItem('tipsy_profile', JSON.stringify(userProfile)); }, [userProfile]);
+
+            const tonightStats = useMemo(() => {
+                const sessionLogs = logs.filter(l => l.session_id === getSessionId());
+                const totalAlcohol = sessionLogs.reduce((acc, log) => acc + (drinks.find(d => d.id === log.drink_id)?.alcohol_ml || 0), 0);
+                const alcoholGrams = totalAlcohol * 0.789;
+                const r = userProfile.gender === 'male' ? 0.68 : 0.55;
+                const first = sessionLogs.length > 0 ? Math.min(...sessionLogs.map(l => l.timestamp)) : Date.now();
+                const hours = (Date.now() - first) / 3600000;
+                let bac = (alcoholGrams / (userProfile.weight_kg * 1000 * r)) * 100;
+                bac = Math.max(0, bac - (hours * 0.015));
+
+                let tipsy = 0.04, drunk = 0.10, wasted = 0.20;
+                if (userProfile.tolerance_type === 'manual') {
+                    if (userProfile.manual_tolerance === 'low') { tipsy = 0.03; drunk = 0.08; wasted = 0.15; }
+                    else if (userProfile.manual_tolerance === 'high') { tipsy = 0.08; drunk = 0.18; wasted = 0.32; }
+                    else { tipsy = 0.05; drunk = 0.12; wasted = 0.22; }
+                }
+
+                let status = 'Sober';
+                if (bac > wasted) status = 'Wasted';
+                else if (bac > drunk) status = 'Drunk';
+                else if (bac > tipsy) status = 'Tipsy';
+
+                return { count: sessionLogs.length, alcoholMl: totalAlcohol.toFixed(1), bac: bac.toFixed(3), status, tipsyThreshold: tipsy, drunkThreshold: drunk, wastedThreshold: wasted };
+            }, [logs, drinks, userProfile]);
+
+            useEffect(() => {
+                if (tonightStats.status === 'Wasted' && !showDrunkPopup && userProfile.enable_selfie_reminder) {
+                    const last = [...selfies].sort((a,b) => b.timestamp - a.timestamp)[0];
+                    if (!last || last.timestamp < Date.now() - 3600000) setShowDrunkPopup(true);
+                }
+            }, [tonightStats.status, selfies, userProfile]);
+
+            const filteredDrinks = useMemo(() => {
+                let res = drinks;
+                if (selectedCategory !== 'All') res = selectedCategory === 'My Drinks' ? res.filter(d => d.is_custom) : res.filter(d => d.category === selectedCategory);
+                if (searchQuery) res = res.filter(d => d.name.toLowerCase().includes(searchQuery.toLowerCase()));
+                return [...res].sort((a, b) => (a.is_pinned === b.is_pinned ? (a.is_favorite === b.is_favorite ? a.name.localeCompare(b.name) : (a.is_favorite ? -1 : 1)) : (a.is_pinned ? -1 : 1)));
+            }, [drinks, selectedCategory, searchQuery]);
+
+            const logDrink = (drink) => {
+                setLogs(prev => [...prev, { id: generateId(), drink_id: drink.id, timestamp: Date.now(), session_id: getSessionId() }]);
+                setToasts(prev => [...prev, { id: generateId(), message: `+1 ${drink.name}` }]);
+            };
+
+            const toggleFavorite = (id, e) => { e.stopPropagation(); setDrinks(prev => prev.map(d => d.id === id ? { ...d, is_favorite: !d.is_favorite } : d)); };
+            const togglePin = (id, e) => { e.stopPropagation(); setDrinks(prev => prev.map(d => d.id === id ? { ...d, is_pinned: !d.is_pinned } : d)); };
+            const removeDrink = (id, e) => { e.stopPropagation(); if (confirm('Delete?')) setDrinks(prev => prev.filter(d => d.id !== id)); };
+
+            const handleSelfieCapture = (e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setSelfies(prev => [...prev, { id: generateId(), timestamp: Date.now(), image_url: reader.result, session_id: getSessionId() }]);
+                        setShowDrunkPopup(false);
+                        setToasts(prev => [...prev, { id: generateId(), message: "Captured! 📸" }]);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="min-h-screen pb-40 px-4 pt-6 max-w-md mx-auto relative overflow-x-hidden">
+                    <header className="mb-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h1 className="text-3xl font-semibold tracking-tight text-stone-800">TIPSY<span className="text-neon-pink">🍸</span></h1>
+                            <div className="flex gap-2">
+                                <button onClick={() => setActiveTab(activeTab === 'profile' ? 'home' : 'profile')} className={`w-10 h-10 rounded-full glass flex items-center justify-center transition-all ${activeTab === 'profile' ? 'text-neon-blue' : 'text-stone-400'}`}><User className="w-5 h-5" /></button>
+                                <button onClick={() => setShowAddModal(true)} className="w-10 h-10 rounded-full glass flex items-center justify-center text-neon-blue"><Plus className="w-6 h-6" /></button>
+                            </div>
+                        </div>
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+                            <input type="text" placeholder="Search drinks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full glass rounded-3xl py-3.5 pl-12 pr-4 text-stone-800 placeholder:text-stone-400 focus:outline-none shadow-sm" />
+                        </div>
+                    </header>
+
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar mb-8 -mx-4 px-4">
+                        {CATEGORIES.map(cat => (
+                            <button key={cat} onClick={() => setSelectedCategory(cat)} className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-medium transition-all ${selectedCategory === cat ? 'bg-neon-blue text-white shadow-lg' : 'glass text-stone-500'}`}>{cat}</button>
+                        ))}
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                        {activeTab === 'home' ? (
+                            <motion.div key="home" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-8">
+                                {selectedCategory === 'All' && !searchQuery && filteredDrinks.some(d => d.is_pinned || d.is_favorite) && (
+                                    <section>
+                                        <h2 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">Favorites & Pinned</h2>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {filteredDrinks.filter(d => d.is_pinned || d.is_favorite).map(drink => (
+                                                <DrinkCard key={drink.id} drink={drink} onLog={logDrink} onToggleFavorite={toggleFavorite} onTogglePin={togglePin} onRemove={removeDrink} />
+                                            ))}
+                                        </div>
+                                    </section>
+                                )}
+                                <section>
+                                    <h2 className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-4 ml-1">{searchQuery ? `Search Results (${filteredDrinks.length})` : selectedCategory === 'All' ? 'Drink Menu' : selectedCategory}</h2>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {filteredDrinks.length > 0 ? (
+                                            (selectedCategory === 'All' && !searchQuery ? filteredDrinks.filter(d => !d.is_pinned && !d.is_favorite) : filteredDrinks).map(drink => (
+                                                <DrinkCard key={drink.id} drink={drink} onLog={logDrink} onToggleFavorite={toggleFavorite} onTogglePin={togglePin} onRemove={removeDrink} />
+                                            ))
+                                        ) : <div className="col-span-2 text-center py-20 text-stone-300">No drinks found</div>}
+                                    </div>
+                                </section>
+                            </motion.div>
+                        ) : activeTab === 'timeline' ? (
+                            <motion.div key="timeline" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                                <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-stone-800"><History className="w-5 h-5 text-neon-blue" />Night Out Diary</h2>
+                                {logs.filter(l => l.session_id === getSessionId()).length > 0 ? logs.filter(l => l.session_id === getSessionId()).map(item => (
+                                    <div key={item.id} className="glass rounded-2xl p-4 flex items-center justify-between shadow-sm">
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-stone-400 font-mono text-sm">{new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            <span className="font-medium text-stone-700">{drinks.find(d => d.id === item.drink_id)?.name}</span>
+                                        </div>
+                                        <button onClick={() => setLogs(prev => prev.filter(l => l.id !== item.id))} className="text-stone-300 hover:text-neon-pink"><Trash2 className="w-4 h-4" /></button>
+                                    </div>
+                                )) : <div className="text-center py-20 text-stone-300">No logs yet.</div>}
+                            </motion.div>
+                        ) : (
+                            <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="space-y-6">
+                                <div className="glass rounded-[2.5rem] p-6 shadow-sm">
+                                    <div className="flex items-center gap-4 mb-6">
+                                        <div className="w-16 h-16 rounded-full bg-neon-blue/10 flex items-center justify-center text-neon-blue"><User className="w-8 h-8" /></div>
+                                        <div><h2 className="text-xl font-bold text-stone-800">{userProfile.username}</h2><p className="text-stone-400 text-sm">{userProfile.email}</p></div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <input type="text" value={userProfile.username} onChange={(e) => setUserProfile(p => ({ ...p, username: e.target.value }))} className="w-full glass rounded-2xl p-4 text-stone-800 focus:outline-none" />
+                                    </div>
+                                </div>
+                                <div className="glass rounded-[2.5rem] p-6 shadow-sm">
+                                    <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2"><Info className="w-5 h-5 text-neon-blue" />Personal Info</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <input type="number" value={userProfile.age} onChange={(e) => setUserProfile(p => ({ ...p, age: parseInt(e.target.value) }))} className="glass rounded-2xl p-4" />
+                                        <input type="number" value={userProfile.weight_kg} onChange={(e) => setUserProfile(p => ({ ...p, weight_kg: parseInt(e.target.value) }))} className="glass rounded-2xl p-4" />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    <div className="fixed bottom-6 left-6 right-6 p-3.5 glass rounded-[2rem] border border-stone-200 z-40 shadow-xl">
+                        <div className="max-w-md mx-auto">
+                            <div className="flex justify-between items-center mb-3 px-1">
+                                <div className="flex gap-4 items-center">
+                                    <div className="flex flex-col"><p className="text-[14px] font-bold text-stone-800">{tonightStats.count}</p><p className="text-[8px] text-stone-400 font-bold uppercase">Drinks</p></div>
+                                    <div className="flex flex-col"><p className="text-[14px] font-bold text-stone-800">{tonightStats.alcoholMl}</p><p className="text-[8px] text-stone-400 font-bold uppercase">Alcohol</p></div>
+                                    <div className="flex flex-col"><p className="text-[14px] font-bold text-neon-blue">{tonightStats.bac}</p><p className="text-[8px] text-stone-400 font-bold uppercase">BAC</p></div>
+                                </div>
+                                <p className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tonightStats.status === 'Sober' ? 'bg-neon-green/10 text-neon-green' : tonightStats.status === 'Tipsy' ? 'bg-neon-orange/10 text-neon-orange' : 'bg-neon-pink/10 text-neon-pink'}`}>{tonightStats.status}</p>
+                            </div>
+                            <div className="h-1 w-full bg-stone-100 rounded-full overflow-hidden mb-3.5 flex relative">
+                                <div className="h-full bg-neon-blue transition-all duration-1000" style={{ width: `${Math.min(100, (parseFloat(tonightStats.bac) / (tonightStats.wastedThreshold * 1.2)) * 100)}%` }} />
+                            </div>
+                            <div className="flex justify-around items-center">
+                                <button onClick={() => setActiveTab('home')} className={`flex items-center gap-2 ${activeTab === 'home' ? 'text-neon-blue' : 'text-stone-300'}`}><Home className="w-4 h-4" /><span className="text-[10px] font-bold uppercase">Home</span></button>
+                                <button onClick={() => setActiveTab('timeline')} className={`flex items-center gap-2 ${activeTab === 'timeline' ? 'text-neon-blue' : 'text-stone-300'}`}><History className="w-4 h-4" /><span className="text-[10px] font-bold uppercase">Timeline</span></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <AnimatePresence>{toasts.map(t => <Toast key={t.id} message={t.message} onComplete={() => setToasts(p => p.filter(x => x.id !== t.id))} />)}</AnimatePresence>
+                    
+                    {/* Add Modal Simplified */}
+                    <AnimatePresence>
+                        {showAddModal && (
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
+                                <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass w-full max-w-md rounded-t-[2.5rem] p-8 relative shadow-2xl">
+                                    <button onClick={() => setShowAddModal(false)} className="absolute right-6 top-6 w-10 h-10 rounded-full glass flex items-center justify-center text-stone-400"><X className="w-6 h-6" /></button>
+                                    <h2 className="text-2xl font-bold mb-8 text-stone-800">New Drink</h2>
+                                    <form onSubmit={(e) => {
+                                        e.preventDefault();
+                                        const fd = new FormData(e.currentTarget);
+                                        const name = fd.get('name'), abv = parseFloat(fd.get('abv')), vol = parseFloat(fd.get('volume')), cat = fd.get('category');
+                                        if (name && abv && vol) {
+                                            setDrinks(p => [...p, { id: generateId(), name, abv, volume_ml: vol, alcohol_ml: (vol * abv)/100, category: cat, icon: '🍹', is_favorite: false, is_pinned: false, is_custom: true }]);
+                                            setShowAddModal(false);
+                                        }
+                                    }} className="space-y-4">
+                                        <input name="name" placeholder="Name" className="w-full glass rounded-2xl p-4" required />
+                                        <div className="flex gap-2">
+                                            <input name="abv" type="number" placeholder="ABV %" className="w-1/2 glass rounded-2xl p-4" required />
+                                            <input name="volume" type="number" placeholder="Vol ml" className="w-1/2 glass rounded-2xl p-4" required />
+                                        </div>
+                                        <select name="category" className="w-full glass rounded-2xl p-4">
+                                            {CATEGORIES.filter(c => c !== 'All' && c !== 'My Drinks').map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <button type="submit" className="w-full bg-neon-blue text-white font-bold py-5 rounded-2xl">Create</button>
+                                    </form>
+                                </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
