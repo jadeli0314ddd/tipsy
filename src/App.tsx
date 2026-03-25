@@ -80,6 +80,14 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [toasts, setToasts] = useState<{ id: string; message: string }[]>([]);
   const [avatarEmoji, setAvatarEmoji] = useState<string>(() => localStorage.getItem('tipsy_avatar') || '🙂');
+  const [showSelfieModal, setShowSelfieModal] = useState(false);
+  const [selfieCapturing, setSelfieCapturing] = useState(false);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+  const [selfieUploading, setSelfieUploading] = useState(false);
+  const wasWastedRef = useRef(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const AVATAR_OPTIONS = ['🙂','😎','🥳','🍸','🍹','🥂','🍺','🦊','🐱','🐸','🦋','🌙','⭐','🔥','💫','🌈','🎉','👑'];
 
@@ -162,6 +170,67 @@ export default function App() {
   const removeDrink = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm('Delete this drink?')) setDrinks(prev => prev.filter(d => d.id !== id));
+  };
+
+  const deleteLog = async (logId: string) => {
+    const { error } = await supabase.from('drinks_log').delete().eq('id', logId);
+    if (!error) setLogs(prev => prev.filter(l => l.id !== logId));
+  };
+
+  // Detect wasted status and show selfie prompt
+  useEffect(() => {
+    if (tonightStats.status === 'Wasted' && !wasWastedRef.current) {
+      wasWastedRef.current = true;
+      setTimeout(() => setShowSelfieModal(true), 800);
+    }
+    if (tonightStats.status !== 'Wasted') wasWastedRef.current = false;
+  }, [tonightStats.status]);
+
+  const startCamera = async () => {
+    setSelfieCapturing(true);
+    setSelfiePreview(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch {
+      setSelfieCapturing(false);
+    }
+  };
+
+  const takeSelfie = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d')?.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    setSelfiePreview(dataUrl);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    setSelfieCapturing(false);
+  };
+
+  const saveSelfie = async () => {
+    if (!selfiePreview || !session) return;
+    setSelfieUploading(true);
+    const { data, error } = await supabase.from('selfies').insert([{
+      image_url: selfiePreview, session_id: currentSessionId
+    }]).select();
+    if (!error && data) {
+      setSelfies(prev => [data[0], ...prev]);
+      setToasts(prev => [...prev, { id: generateId(), message: '📸 Selfie saved!' }]);
+    }
+    setSelfieUploading(false);
+    setSelfiePreview(null);
+    setShowSelfieModal(false);
+  };
+
+  const closeSelfieModal = () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    setSelfieCapturing(false);
+    setSelfiePreview(null);
+    setShowSelfieModal(false);
   };
 
   const currentSessionId = getSessionId();
@@ -270,23 +339,48 @@ export default function App() {
             {filteredDrinks.map(drink => (<DrinkCard key={drink.id} drink={drink} onLog={logDrink} onToggleFavorite={toggleFavorite} onTogglePin={togglePin} onRemove={removeDrink} />))}
           </motion.div>
         ) : activeTab === 'timeline' ? (
-          <motion.div key="timeline" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+          <motion.div key="timeline" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><History className="text-neon-blue" /> Night Out Diary</h2>
-            {tonightLogs.length === 0 && (
+            {tonightLogs.length === 0 && selfies.filter(s => s.session_id === currentSessionId).length === 0 && (
               <div className="text-center text-stone-300 py-12">
                 <div className="text-4xl mb-3">🌙</div>
                 <p className="text-sm">No drinks logged tonight yet</p>
               </div>
             )}
-            {tonightLogs.map(log => (
-              <div key={log.id} className="glass p-4 rounded-2xl flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{renderIcon(drinks.find(d => d.id === log.drink_id)?.icon || '🍹')}</span>
-                  <span className="font-medium">{log.drink_name}</span>
-                </div>
-                <span className="text-stone-400 text-xs font-mono">{new Date(log.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-            ))}
+            {(() => {
+              const tonightSelfies = selfies.filter(s => s.session_id === currentSessionId);
+              const allItems = [
+                ...tonightLogs.map(l => ({ type: 'drink' as const, time: new Date(l.created_at || Date.now()).getTime(), data: l })),
+                ...tonightSelfies.map(s => ({ type: 'selfie' as const, time: new Date(s.timestamp || s.created_at || Date.now()).getTime(), data: s })),
+              ].sort((a, b) => b.time - a.time);
+              return allItems.map(item => item.type === 'drink' ? (
+                <motion.div key={item.data.id} layout initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass p-4 rounded-2xl flex justify-between items-center group">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">{renderIcon(drinks.find(d => d.id === item.data.drink_id)?.icon || '🍹')}</span>
+                    <div>
+                      <span className="font-medium">{item.data.drink_name}</span>
+                      <p className="text-stone-400 text-xs">{item.data.abv}% · {item.data.volume}ml</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-stone-400 text-xs font-mono">{new Date(item.data.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <button onClick={() => deleteLog(item.data.id)} className="w-7 h-7 rounded-full flex items-center justify-center text-stone-300 hover:text-red-400 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div key={item.data.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-2xl overflow-hidden relative">
+                  <img src={item.data.image_url} alt="selfie" className="w-full object-cover rounded-2xl" style={{ maxHeight: 220 }} />
+                  <div className="absolute bottom-2 left-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm rounded-full px-2.5 py-1">
+                    <Camera className="w-3 h-3 text-white" />
+                    <span className="text-white text-[10px] font-bold">
+                      {new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </motion.div>
+              ));
+            })()}
           </motion.div>
         ) : (
           <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
@@ -355,6 +449,51 @@ export default function App() {
           <button onClick={() => setActiveTab('timeline')} className={`flex items-center gap-2 transition-colors ${activeTab === 'timeline' ? 'text-neon-blue' : 'text-stone-300'}`}><History className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Diary</span></button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showSelfieModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm">
+            <motion.div initial={{ y: 100, scale: 0.95 }} animate={{ y: 0, scale: 1 }} exit={{ y: 100 }} className="glass w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 relative shadow-2xl">
+              <button onClick={closeSelfieModal} className="absolute right-5 top-5 w-9 h-9 rounded-full glass flex items-center justify-center text-stone-400"><X className="w-4 h-4" /></button>
+              <div className="text-center mb-5">
+                <div className="text-4xl mb-2">🥴</div>
+                <h2 className="text-xl font-black">You're Wasted!</h2>
+                <p className="text-stone-400 text-sm mt-1">Capture this legendary moment 📸</p>
+              </div>
+              {!selfieCapturing && !selfiePreview && (
+                <button onClick={startCamera} className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 shadow-lg" style={{ background: '#e87c3a' }}>
+                  <Camera className="w-5 h-5" /> Open Camera
+                </button>
+              )}
+              {selfieCapturing && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl overflow-hidden bg-stone-100 aspect-[4/3]">
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                  </div>
+                  <button onClick={takeSelfie} className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2" style={{ background: '#e87c3a' }}>
+                    📸 Snap!
+                  </button>
+                </div>
+              )}
+              {selfiePreview && (
+                <div className="space-y-3">
+                  <div className="rounded-2xl overflow-hidden">
+                    <img src={selfiePreview} alt="preview" className="w-full object-cover rounded-2xl" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={startCamera} className="flex-1 py-3 rounded-2xl font-bold glass text-stone-500">Retake</button>
+                    <button onClick={saveSelfie} disabled={selfieUploading} className="flex-1 py-3 rounded-2xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-60" style={{ background: '#e87c3a' }}>
+                      {selfieUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : '💾 Save'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              <canvas ref={canvasRef} className="hidden" />
+              <button onClick={closeSelfieModal} className="w-full mt-3 py-3 text-stone-400 text-sm font-medium">Skip for now</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>{toasts.map(t => <Toast key={t.id} message={t.message} onComplete={() => setToasts(p => p.filter(x => x.id !== t.id))} />)}</AnimatePresence>
 
