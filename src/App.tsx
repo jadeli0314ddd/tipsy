@@ -299,14 +299,28 @@ export default function App() {
               </div>
             )}
             {tonightLogs.map(log => (
-              <div key={log.id} className="glass p-4 rounded-2xl flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{renderIcon(drinks.find(d => d.id === log.drink_id)?.icon || '🍹')}</span>
-                  <span className="font-medium">{log.drink_name}</span>
-                </div>
-                <span className="text-stone-400 text-xs font-mono">{new Date(log.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-            ))}
+  <div key={log.id} className="glass p-4 rounded-2xl flex justify-between items-center">
+    <div className="flex items-center gap-3">
+      <span className="text-2xl">{renderIcon(drinks.find(d => d.id === log.drink_id)?.icon || '🍹')}</span>
+      <div>
+        <span className="font-medium block">{log.drink_name}</span>
+        <span className="text-stone-400 text-xs font-mono">{new Date(log.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+    </div>
+    <button 
+      onClick={async () => {
+        const { error } = await supabase.from('drinks_log').delete().eq('id', log.id);
+        if (!error) {
+          setLogs(prev => prev.filter(l => l.id !== log.id));
+          setToasts(prev => [...prev, { id: generateId(), message: `已删除 ${log.drink_name}` }]);
+        }
+      }}
+      className="p-2 rounded-full hover:bg-red-50 transition-colors text-stone-400 hover:text-red-500"
+    >
+      <Trash2 className="w-4 h-4" />
+    </button>
+  </div>
+))}
           </motion.div>
         ) : (
           <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
