@@ -139,35 +139,15 @@ export default function App() {
   const handleLogout = () => supabase.auth.signOut();
 
   const logDrink = async (drink: Drink) => {
-  try {
-    const drinkData = {
-      drink_id: drink.id,
-      drink_name: drink.name,
-      abv: Number(drink.abv),
-      volume: Number(drink.volume_ml),
-      session_id: getSessionId()
-    };
-    
-    const { data, error } = await supabase
-      .from('drinks_log')
-      .insert([drinkData])
-      .select();
-    
-    if (error) {
-      console.error('Error:', error);
-      setToasts(prev => [...prev, { id: generateId(), message: `保存失败: ${error.message}` }]);
-      return;
-    }
-    
-    if (data) {
+    if (!session) return;
+    const { data, error } = await supabase.from('drinks_log').insert([{
+      drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume_ml, session_id: getSessionId()
+    }]).select();
+    if (!error && data) {
       setLogs(prev => [data[0], ...prev]);
       setToasts(prev => [...prev, { id: generateId(), message: `+1 ${drink.name}` }]);
     }
-  } catch (err) {
-    console.error('Error:', err);
-    setToasts(prev => [...prev, { id: generateId(), message: '保存失败，请重试' }]);
-  }
-};
+  };
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -207,38 +187,6 @@ export default function App() {
       t_tipsy, t_drunk, t_wasted
     };
   }, [tonightLogs, userProfile]);
-
-  // 自拍提醒功能 - 放在 tonightStats 定义之后
-  useEffect(() => {
-    if (tonightStats.status === 'Wasted' && userProfile.enable_selfie_reminder) {
-      const lastSelfiePrompt = localStorage.getItem('last_selfie_prompt_date');
-      const today = new Date().toISOString().split('T')[0];
-      
-      if (lastSelfiePrompt !== today) {
-        const timer = setTimeout(() => {
-          const shouldTakeSelfie = window.confirm('📸 你已经达到 Wasted 状态！\n\n要不要拍张自拍记录一下这个时刻？');
-          
-          if (shouldTakeSelfie) {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.capture = 'environment';
-            input.onchange = async (e) => {
-              const file = (e.target as HTMLInputElement).files?.[0];
-              if (file) {
-                setToasts(prev => [...prev, { id: generateId(), message: '📸 自拍已保存！' }]);
-              }
-            };
-            input.click();
-          }
-          
-          localStorage.setItem('last_selfie_prompt_date', today);
-        }, 1000);
-        
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [tonightStats.status, userProfile.enable_selfie_reminder]);
 
   const filteredDrinks = useMemo(() => {
     let result = drinks;
@@ -331,28 +279,14 @@ export default function App() {
               </div>
             )}
             {tonightLogs.map(log => (
-  <div key={log.id} className="glass p-4 rounded-2xl flex justify-between items-center">
-    <div className="flex items-center gap-3">
-      <span className="text-2xl">{renderIcon(drinks.find(d => d.id === log.drink_id)?.icon || '🍹')}</span>
-      <div>
-        <span className="font-medium block">{log.drink_name}</span>
-        <span className="text-stone-400 text-xs font-mono">{new Date(log.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-    </div>
-    <button 
-      onClick={async () => {
-        const { error } = await supabase.from('drinks_log').delete().eq('id', log.id);
-        if (!error) {
-          setLogs(prev => prev.filter(l => l.id !== log.id));
-          setToasts(prev => [...prev, { id: generateId(), message: `已删除 ${log.drink_name}` }]);
-        }
-      }}
-      className="p-2 rounded-full hover:bg-red-50 transition-colors text-stone-400 hover:text-red-500"
-    >
-      <Trash2 className="w-4 h-4" />
-    </button>
-  </div>
-))}
+              <div key={log.id} className="glass p-4 rounded-2xl flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{renderIcon(drinks.find(d => d.id === log.drink_id)?.icon || '🍹')}</span>
+                  <span className="font-medium">{log.drink_name}</span>
+                </div>
+                <span className="text-stone-400 text-xs font-mono">{new Date(log.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            ))}
           </motion.div>
         ) : (
           <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
