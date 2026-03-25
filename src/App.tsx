@@ -125,6 +125,30 @@ export default function App() {
     }
   }, [session]);
 
+  const currentSessionId = getSessionId();
+  const tonightLogs = useMemo(() => logs.filter(l => l.session_id === currentSessionId), [logs, currentSessionId]);
+
+  const tonightStats = useMemo(() => {
+    const totalAlcoholMl = tonightLogs.reduce((acc, log) => acc + ((log.volume * log.abv) / 100), 0);
+    const alcoholGrams = totalAlcoholMl * 0.789;
+    const r = userProfile.gender === 'male' ? 0.68 : 0.55;
+    const weightGrams = userProfile.weight_kg * 1000;
+    const firstDrinkTime = tonightLogs.length > 0 ? new Date(tonightLogs[tonightLogs.length-1].created_at || Date.now()).getTime() : Date.now();
+    const hours = (Date.now() - firstDrinkTime) / (1000 * 60 * 60);
+    let bac = (alcoholGrams / (weightGrams * r)) * 100;
+    bac = Math.max(0, bac - (hours * 0.015));
+    let t_tipsy = 0.04, t_drunk = 0.10, t_wasted = 0.20;
+    if (userProfile.tolerance_type === 'manual') {
+      if (userProfile.manual_tolerance === 'low') { t_tipsy = 0.03; t_drunk = 0.08; t_wasted = 0.15; }
+      else if (userProfile.manual_tolerance === 'high') { t_tipsy = 0.08; t_drunk = 0.18; t_wasted = 0.32; }
+    }
+    return { 
+      count: tonightLogs.length, alcoholMl: totalAlcoholMl.toFixed(1), bac: bac.toFixed(3), 
+      status: bac > t_wasted ? 'Wasted' : bac > t_drunk ? 'Drunk' : bac > t_tipsy ? 'Tipsy' : 'Sober',
+      t_tipsy, t_drunk, t_wasted
+    };
+  }, [tonightLogs, userProfile]);
+
   useEffect(() => { localStorage.setItem('tipsy_profile', JSON.stringify(userProfile)); }, [userProfile]);
   useEffect(() => { if(drinks.length > 0) localStorage.setItem('tipsy_drinks', JSON.stringify(drinks)); }, [drinks]);
   useEffect(() => { localStorage.setItem('tipsy_avatar', avatarEmoji); }, [avatarEmoji]);
@@ -232,30 +256,6 @@ export default function App() {
     setSelfiePreview(null);
     setShowSelfieModal(false);
   };
-
-  const currentSessionId = getSessionId();
-  const tonightLogs = useMemo(() => logs.filter(l => l.session_id === currentSessionId), [logs, currentSessionId]);
-
-  const tonightStats = useMemo(() => {
-    const totalAlcoholMl = tonightLogs.reduce((acc, log) => acc + ((log.volume * log.abv) / 100), 0);
-    const alcoholGrams = totalAlcoholMl * 0.789;
-    const r = userProfile.gender === 'male' ? 0.68 : 0.55;
-    const weightGrams = userProfile.weight_kg * 1000;
-    const firstDrinkTime = tonightLogs.length > 0 ? new Date(tonightLogs[tonightLogs.length-1].created_at || Date.now()).getTime() : Date.now();
-    const hours = (Date.now() - firstDrinkTime) / (1000 * 60 * 60);
-    let bac = (alcoholGrams / (weightGrams * r)) * 100;
-    bac = Math.max(0, bac - (hours * 0.015));
-    let t_tipsy = 0.04, t_drunk = 0.10, t_wasted = 0.20;
-    if (userProfile.tolerance_type === 'manual') {
-      if (userProfile.manual_tolerance === 'low') { t_tipsy = 0.03; t_drunk = 0.08; t_wasted = 0.15; }
-      else if (userProfile.manual_tolerance === 'high') { t_tipsy = 0.08; t_drunk = 0.18; t_wasted = 0.32; }
-    }
-    return { 
-      count: tonightLogs.length, alcoholMl: totalAlcoholMl.toFixed(1), bac: bac.toFixed(3), 
-      status: bac > t_wasted ? 'Wasted' : bac > t_drunk ? 'Drunk' : bac > t_tipsy ? 'Tipsy' : 'Sober',
-      t_tipsy, t_drunk, t_wasted
-    };
-  }, [tonightLogs, userProfile]);
 
   const filteredDrinks = useMemo(() => {
     let result = drinks;
