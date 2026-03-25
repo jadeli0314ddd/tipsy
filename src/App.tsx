@@ -68,8 +68,11 @@ export default function App() {
   // --- Auth & Profile ---
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
-  const [loginMsg, setLoginMsg] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginMsg, setLoginMsg] = useState<{text: string; type: 'error' | 'success'} | null>(null);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
   
   // --- Data States ---
   const [drinks, setDrinks] = useState<Drink[]>([]);
@@ -127,9 +130,17 @@ export default function App() {
   // --- Logic Functions ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginMsg('Sending magic link...');
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
-    setLoginMsg(error ? `Error: ${error.message}` : '✅ Check your email!');
+    setAuthSubmitting(true);
+    setLoginMsg(null);
+    if (authMode === 'login') {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setLoginMsg({ text: error.message, type: 'error' });
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) setLoginMsg({ text: error.message, type: 'error' });
+      else setLoginMsg({ text: '✅ Account created! Check your email to confirm.', type: 'success' });
+    }
+    setAuthSubmitting(false);
   };
 
   const handleLogout = () => supabase.auth.signOut();
@@ -160,7 +171,7 @@ export default function App() {
     if (confirm('Delete this drink?')) setDrinks(prev => prev.filter(d => d.id !== id));
   };
 
-  // --- BAC Calculation (完整复活版) ---
+  // --- BAC Calculation ---
   const currentSessionId = getSessionId();
   const tonightLogs = useMemo(() => logs.filter(l => l.session_id === currentSessionId), [logs, currentSessionId]);
   
@@ -196,20 +207,113 @@ export default function App() {
   }, [drinks, selectedCategory, searchQuery]);
 
   // --- Rendering ---
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-stone-50"><Loader2 className="animate-spin text-neon-blue" /></div>;
+  if (authLoading) return <div className="min-h-screen flex items-center justify-center" style={{ background: '#fdfbf7' }}><Loader2 className="animate-spin text-amber-400" /></div>;
 
   if (!session) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-stone-50">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass w-full max-w-sm p-8 rounded-[2.5rem] text-center">
-          <div className="text-5xl mb-6">🍸</div>
-          <h1 className="text-3xl font-bold text-stone-800 mb-2">TIPSY</h1>
-          <p className="text-stone-400 mb-8 text-sm">Sign in to save your history</p>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input type="email" placeholder="jade@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full glass rounded-2xl p-4 outline-none" />
-            <button type="submit" className="w-full bg-neon-blue text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg"><LogIn className="w-5 h-5" /> Get Magic Link</button>
-          </form>
-          {loginMsg && <p className="mt-4 text-xs font-medium text-neon-pink">{loginMsg}</p>}
+      <div className="min-h-screen flex flex-col justify-end p-6 relative overflow-hidden" style={{ background: '#fdfbf7' }}>
+        {/* Decorative background blobs */}
+        <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+          <div className="absolute top-[-80px] right-[-60px] w-72 h-72 rounded-full opacity-30" style={{ background: 'radial-gradient(circle, #fde68a 0%, transparent 70%)' }} />
+          <div className="absolute top-[15%] left-[-80px] w-56 h-56 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, #fca5a5 0%, transparent 70%)' }} />
+          <div className="absolute top-[30%] right-[-40px] w-40 h-40 rounded-full opacity-25" style={{ background: 'radial-gradient(circle, #6ee7b7 0%, transparent 70%)' }} />
+        </div>
+
+        {/* Hero area */}
+        <div className="flex-1 flex flex-col items-center justify-center pb-8 relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: -30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-2"
+          >
+            <div className="text-7xl mb-4 drop-shadow-sm">🍸</div>
+            <h1 className="text-5xl font-black tracking-tight text-stone-900 mb-1">TIPSY</h1>
+            <p className="text-stone-400 text-sm font-medium tracking-widest uppercase">Your Night, Tracked</p>
+          </motion.div>
+        </div>
+
+        {/* Auth card */}
+        <motion.div
+          initial={{ opacity: 0, y: 60 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="relative z-10 w-full max-w-sm mx-auto"
+        >
+          {/* Tab switcher */}
+          <div className="flex glass rounded-2xl p-1 mb-5">
+            <button
+              onClick={() => { setAuthMode('login'); setLoginMsg(null); }}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${authMode === 'login' ? 'bg-amber-400 text-white shadow-sm' : 'text-stone-400'}`}
+            >Sign In</button>
+            <button
+              onClick={() => { setAuthMode('signup'); setLoginMsg(null); }}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${authMode === 'signup' ? 'bg-amber-400 text-white shadow-sm' : 'text-stone-400'}`}
+            >Create Account</button>
+          </div>
+
+          <div className="glass rounded-[2rem] p-6 shadow-lg">
+            <form onSubmit={handleLogin} className="space-y-3">
+              {/* Email */}
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-300" />
+                <input
+                  type="email"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl py-4 pl-11 pr-4 outline-none text-sm placeholder-stone-300 focus:border-amber-400 transition-colors"
+                />
+              </div>
+
+              {/* Password */}
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 text-sm">🔒</span>
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-2xl py-4 pl-11 pr-4 outline-none text-sm placeholder-stone-300 focus:border-amber-400 transition-colors"
+                />
+              </div>
+
+              {/* Message */}
+              <AnimatePresence>
+                {loginMsg && (
+                  <motion.p
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className={`text-xs font-medium px-1 ${loginMsg.type === 'error' ? 'text-red-500' : 'text-emerald-500'}`}
+                  >
+                    {loginMsg.text}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={authSubmitting}
+                className="w-full bg-amber-400 hover:bg-amber-500 active:scale-[0.98] text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all disabled:opacity-60 mt-1"
+              >
+                {authSubmitting
+                  ? <Loader2 className="w-5 h-5 animate-spin" />
+                  : authMode === 'login'
+                    ? <><LogIn className="w-4 h-4" /> Sign In</>
+                    : <><span>🎉</span> Create Account</>
+                }
+              </button>
+            </form>
+          </div>
+
+          <p className="text-center text-[11px] text-stone-300 mt-5 mb-2">
+            By continuing you agree to our Terms & Privacy Policy
+          </p>
         </motion.div>
       </div>
     );
@@ -285,7 +389,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Summary & Nav (复刻完整版) */}
+      {/* Summary & Nav */}
       <div className="fixed bottom-6 left-6 right-6 p-4 glass rounded-[2.5rem] border border-stone-200 z-40 shadow-2xl max-w-md mx-auto">
         <div className="flex justify-between items-center mb-3">
           <div className="flex gap-4">
