@@ -121,38 +121,6 @@ export default function App() {
   useEffect(() => { if(drinks.length > 0) localStorage.setItem('tipsy_drinks', JSON.stringify(drinks)); }, [drinks]);
   useEffect(() => { localStorage.setItem('tipsy_avatar', avatarEmoji); }, [avatarEmoji]);
 
-  // 自拍提醒功能
-  useEffect(() => {
-    if (tonightStats.status === 'Wasted' && userProfile.enable_selfie_reminder) {
-      const lastSelfiePrompt = localStorage.getItem('last_selfie_prompt_date');
-      const today = new Date().toISOString().split('T')[0];
-      
-      if (lastSelfiePrompt !== today) {
-        const timer = setTimeout(() => {
-          const shouldTakeSelfie = window.confirm('📸 你已经达到 Wasted 状态！\n\n要不要拍张自拍记录一下这个时刻？');
-          
-          if (shouldTakeSelfie) {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.capture = 'environment';
-            input.onchange = async (e) => {
-              const file = (e.target as HTMLInputElement).files?.[0];
-              if (file) {
-                setToasts(prev => [...prev, { id: generateId(), message: '📸 自拍已保存！' }]);
-              }
-            };
-            input.click();
-          }
-          
-          localStorage.setItem('last_selfie_prompt_date', today);
-        }, 1000);
-        
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [tonightStats.status, userProfile.enable_selfie_reminder]);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthSubmitting(true);
@@ -239,6 +207,38 @@ export default function App() {
       t_tipsy, t_drunk, t_wasted
     };
   }, [tonightLogs, userProfile]);
+
+  // 自拍提醒功能 - 放在 tonightStats 定义之后
+  useEffect(() => {
+    if (tonightStats.status === 'Wasted' && userProfile.enable_selfie_reminder) {
+      const lastSelfiePrompt = localStorage.getItem('last_selfie_prompt_date');
+      const today = new Date().toISOString().split('T')[0];
+      
+      if (lastSelfiePrompt !== today) {
+        const timer = setTimeout(() => {
+          const shouldTakeSelfie = window.confirm('📸 你已经达到 Wasted 状态！\n\n要不要拍张自拍记录一下这个时刻？');
+          
+          if (shouldTakeSelfie) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.capture = 'environment';
+            input.onchange = async (e) => {
+              const file = (e.target as HTMLInputElement).files?.[0];
+              if (file) {
+                setToasts(prev => [...prev, { id: generateId(), message: '📸 自拍已保存！' }]);
+              }
+            };
+            input.click();
+          }
+          
+          localStorage.setItem('last_selfie_prompt_date', today);
+        }, 1000);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [tonightStats.status, userProfile.enable_selfie_reminder]);
 
   const filteredDrinks = useMemo(() => {
     let result = drinks;
