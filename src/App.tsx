@@ -140,7 +140,7 @@ export default function App() {
 
   const logDrink = async (drink: Drink) => {
     const { data, error } = await supabase.from('drinks_log').insert([{
-      drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume, session_id: getSessionId()
+      drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume_ml: drink.volume_ml, session_id: getSessionId()
     }]).select();
     if (!error && data) {
       setLogs(prev => [data[0], ...prev]);
