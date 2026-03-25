@@ -139,7 +139,6 @@ export default function App() {
   const handleLogout = () => supabase.auth.signOut();
 
   const logDrink = async (drink: Drink) => {
-    if (!session) return;
     const { data, error } = await supabase.from('drinks_log').insert([{
       drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume_ml, session_id: getSessionId()
     }]).select();
