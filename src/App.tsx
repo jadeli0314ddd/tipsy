@@ -139,14 +139,35 @@ export default function App() {
   const handleLogout = () => supabase.auth.signOut();
 
   const logDrink = async (drink: Drink) => {
-    const { data, error } = await supabase.from('drinks_log').insert([{
-      drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume, session_id: getSessionId()
-    }]).select();
-    if (!error && data) {
+  try {
+    const drinkData = {
+      drink_id: drink.id,
+      drink_name: drink.name,
+      abv: Number(drink.abv),
+      volume: Number(drink.volume_ml),
+      session_id: getSessionId()
+    };
+    
+    const { data, error } = await supabase
+      .from('drinks_log')
+      .insert([drinkData])
+      .select();
+    
+    if (error) {
+      console.error('Error:', error);
+      setToasts(prev => [...prev, { id: generateId(), message: `保存失败: ${error.message}` }]);
+      return;
+    }
+    
+    if (data) {
       setLogs(prev => [data[0], ...prev]);
       setToasts(prev => [...prev, { id: generateId(), message: `+1 ${drink.name}` }]);
     }
-  };
+  } catch (err) {
+    console.error('Error:', err);
+    setToasts(prev => [...prev, { id: generateId(), message: '保存失败，请重试' }]);
+  }
+};
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
