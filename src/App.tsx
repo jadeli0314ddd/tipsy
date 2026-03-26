@@ -172,12 +172,20 @@ export default function App() {
 
   const logDrink = async (drink: Drink) => {
     if (!session) return;
+    const tempId = generateId();
+    const optimisticLog = {
+      id: tempId, drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume_ml,
+      session_id: getSessionId(), created_at: new Date().toISOString()
+    } as any;
+    setLogs(prev => [optimisticLog, ...prev]);
+    setToasts(prev => [...prev, { id: generateId(), message: `+1 ${drink.name}` }]);
     const { data, error } = await supabase.from('drinks_log').insert([{
       drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume_ml, session_id: getSessionId()
     }]).select();
     if (!error && data) {
-      setLogs(prev => [data[0], ...prev]);
-      setToasts(prev => [...prev, { id: generateId(), message: `+1 ${drink.name}` }]);
+      setLogs(prev => prev.map(l => l.id === tempId ? data[0] : l));
+    } else {
+      setLogs(prev => prev.filter(l => l.id !== tempId));
     }
   };
 
@@ -340,7 +348,7 @@ export default function App() {
           </motion.div>
         ) : activeTab === 'timeline' ? (
           <motion.div key="timeline" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><History className="text-neon-blue" /> Night Out Diary</h2>
+            <div className="mb-4"><h2 className="text-xl font-bold flex items-center gap-2"><History className="text-neon-blue" /> Night Out Diary</h2><p className="text-[11px] text-stone-400 mt-1 ml-1">Records are cleared automatically after 6 hours of inactivity</p></div>
             {tonightLogs.length === 0 && selfies.filter(s => s.session_id === currentSessionId).length === 0 && (
               <div className="text-center text-stone-300 py-12">
                 <div className="text-4xl mb-3">🌙</div>
@@ -364,7 +372,7 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-stone-400 text-xs font-mono">{new Date(item.data.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    <button onClick={() => deleteLog(item.data.id)} className="w-7 h-7 rounded-full flex items-center justify-center text-stone-300 hover:text-red-400 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100">
+                    <button onClick={() => deleteLog(item.data.id)} className="w-7 h-7 rounded-full flex items-center justify-center text-stone-300 hover:text-red-400 hover:bg-red-50 active:text-red-400 active:bg-red-50 transition-all">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -394,7 +402,7 @@ export default function App() {
                     <span className="text-white text-[9px]">✏️</span>
                   </div>
                 </div>
-                <div><h2 className="text-xl font-bold">Settings</h2><p className="text-stone-400 text-sm">{session.user.email}</p></div>
+                <div className="flex-1"><input type="text" value={userProfile.username} onChange={e => setUserProfile(p => ({...p, username: e.target.value}))} className="text-xl font-bold bg-transparent outline-none border-b-2 border-transparent focus:border-neon-blue transition-colors w-full leading-tight" placeholder="Your name" /><p className="text-stone-400 text-sm">{session.user.email}</p></div>
               </div>
               <AnimatePresence>
                 {showAvatarPicker && (
