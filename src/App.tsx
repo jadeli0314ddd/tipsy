@@ -94,7 +94,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile>(() => {
     const saved = localStorage.getItem('tipsy_profile');
     return saved ? JSON.parse(saved) : { 
-      username: 'Jade', email: 'jade@email.com', age: 20, weight_kg: 55, gender: 'female', 
+      username: 'notdrunk', email: '', age: 20, weight_kg: 55, gender: 'female', 
       tolerance_type: 'auto', manual_tolerance: 'medium', enable_selfie_reminder: true 
     };
   });
@@ -174,7 +174,9 @@ export default function App() {
     if (!session) return;
     const tempId = generateId();
     const optimisticLog = {
-      id: tempId, drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume_ml,
+      id: tempId,
+      _isPending: true,
+      drink_id: drink.id, drink_name: drink.name, abv: drink.abv, volume: drink.volume_ml,
       session_id: getSessionId(), created_at: new Date().toISOString()
     } as any;
     setLogs(prev => [optimisticLog, ...prev]);
@@ -205,11 +207,14 @@ export default function App() {
   };
 
   const deleteLog = async (logId: string) => {
+    setLogs(prev => prev.filter(l => l.id !== logId));
     const { error } = await supabase.from('drinks_log').delete().eq('id', logId);
-    if (!error) setLogs(prev => prev.filter(l => l.id !== logId));
+    if (error) {
+      const { data } = await supabase.from('drinks_log').select('*').order('created_at', { ascending: false });
+      if (data) setLogs(data);
+    }
   };
 
-  // Detect wasted status and show selfie prompt
   useEffect(() => {
     if (tonightStats.status === 'Wasted' && !wasWastedRef.current) {
       wasWastedRef.current = true;
@@ -341,199 +346,4 @@ export default function App() {
         {CATEGORIES.map(cat => (<button key={cat} onClick={() => setSelectedCategory(cat)} className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-medium transition-all ${selectedCategory === cat ? 'bg-neon-blue text-white shadow-md' : 'glass text-stone-500'}`}>{cat}</button>))}
       </div>
 
-      <AnimatePresence mode="wait">
-        {activeTab === 'home' ? (
-          <motion.div key="home" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="grid grid-cols-2 gap-3">
-            {filteredDrinks.map(drink => (<DrinkCard key={drink.id} drink={drink} onLog={logDrink} onToggleFavorite={toggleFavorite} onTogglePin={togglePin} onRemove={removeDrink} />))}
-          </motion.div>
-        ) : activeTab === 'timeline' ? (
-          <motion.div key="timeline" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-3">
-            <div className="mb-4"><h2 className="text-xl font-bold flex items-center gap-2"><History className="text-neon-blue" /> Night Out Diary</h2><p className="text-[11px] text-stone-400 mt-1 ml-1">Records are cleared automatically after 6 hours of inactivity</p></div>
-            {tonightLogs.length === 0 && selfies.filter(s => s.session_id === currentSessionId).length === 0 && (
-              <div className="text-center text-stone-300 py-12">
-                <div className="text-4xl mb-3">🌙</div>
-                <p className="text-sm">No drinks logged tonight yet</p>
-              </div>
-            )}
-            {(() => {
-              const tonightSelfies = selfies.filter(s => s.session_id === currentSessionId);
-              const allItems = [
-                ...tonightLogs.map(l => ({ type: 'drink' as const, time: new Date(l.created_at || Date.now()).getTime(), data: l })),
-                ...tonightSelfies.map(s => ({ type: 'selfie' as const, time: new Date(s.timestamp || s.created_at || Date.now()).getTime(), data: s })),
-              ].sort((a, b) => b.time - a.time);
-              return allItems.map(item => item.type === 'drink' ? (
-                <motion.div key={item.data.id} layout initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="glass p-4 rounded-2xl flex justify-between items-center group">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{renderIcon(drinks.find(d => d.id === item.data.drink_id)?.icon || '🍹')}</span>
-                    <div>
-                      <span className="font-medium">{item.data.drink_name}</span>
-                      <p className="text-stone-400 text-xs">{item.data.abv}% · {item.data.volume}ml</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-stone-400 text-xs font-mono">{new Date(item.data.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    <button onClick={() => deleteLog(item.data.id)} className="w-7 h-7 rounded-full flex items-center justify-center text-stone-300 hover:text-red-400 hover:bg-red-50 active:text-red-400 active:bg-red-50 transition-all">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div key={item.data.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="rounded-2xl overflow-hidden relative">
-                  <img src={item.data.image_url} alt="selfie" className="w-full object-cover rounded-2xl" style={{ maxHeight: 220 }} />
-                  <div className="absolute bottom-2 left-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-sm rounded-full px-2.5 py-1">
-                    <Camera className="w-3 h-3 text-white" />
-                    <span className="text-white text-[10px] font-bold">
-                      {new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-                </motion.div>
-              ));
-            })()}
-          </motion.div>
-        ) : (
-          <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-6">
-            <div className="glass rounded-[2.5rem] p-6 shadow-sm">
-              <div className="flex items-center gap-4 mb-6">
-                <div className="relative">
-                  <button onClick={() => setShowAvatarPicker(v => !v)} className="w-16 h-16 rounded-full bg-orange-50 border-2 border-orange-200 flex items-center justify-center text-3xl hover:scale-105 transition-transform">
-                    {avatarEmoji}
-                  </button>
-                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-orange-400 flex items-center justify-center">
-                    <span className="text-white text-[9px]">✏️</span>
-                  </div>
-                </div>
-                <div className="flex-1"><input type="text" value={userProfile.username} onChange={e => setUserProfile(p => ({...p, username: e.target.value}))} className="text-xl font-bold bg-transparent outline-none border-b-2 border-transparent focus:border-neon-blue transition-colors w-full leading-tight" placeholder="Your name" /><p className="text-stone-400 text-sm">{session.user.email}</p></div>
-              </div>
-              <AnimatePresence>
-                {showAvatarPicker && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} className="mb-5 p-3 bg-white rounded-2xl shadow-md border border-stone-100">
-                    <p className="text-[10px] font-bold text-stone-400 uppercase mb-2 ml-1">Choose your avatar</p>
-                    <div className="grid grid-cols-6 gap-2">
-                      {AVATAR_OPTIONS.map(emoji => (
-                        <button key={emoji} onClick={() => { setAvatarEmoji(emoji); setShowAvatarPicker(false); }} className={`text-2xl w-10 h-10 rounded-xl flex items-center justify-center transition-all ${avatarEmoji === emoji ? 'bg-orange-100 scale-110' : 'hover:bg-stone-50'}`}>{emoji}</button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-bold text-stone-400 uppercase ml-1">Age</label>
-                  <input type="number" value={userProfile.age} onChange={e => setUserProfile(p => ({...p, age: +e.target.value}))} className="w-full glass rounded-2xl p-4 outline-none" /></div>
-                  <div><label className="text-[10px] font-bold text-stone-400 uppercase ml-1">Weight (kg)</label>
-                  <input type="number" value={userProfile.weight_kg} onChange={e => setUserProfile(p => ({...p, weight_kg: +e.target.value}))} className="w-full glass rounded-2xl p-4 outline-none" /></div>
-                </div>
-                <div><label className="text-[10px] font-bold text-stone-400 uppercase ml-1">Gender</label>
-                <div className="flex gap-2">{(['male', 'female'] as const).map(g => (<button key={g} onClick={() => setUserProfile(p => ({...p, gender: g}))} className={`flex-1 py-3 rounded-2xl font-bold capitalize ${userProfile.gender === g ? 'bg-neon-blue text-white shadow-md' : 'glass text-stone-400'}`}>{g}</button>))}</div></div>
-              </div>
-            </div>
-            <div className="glass rounded-[2.5rem] p-6">
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Flame className="text-neon-orange" /> Tolerance</h3>
-              <div className="flex gap-2 mb-4">
-                <button onClick={() => setUserProfile(p => ({...p, tolerance_type: 'auto'}))} className={`flex-1 py-3 rounded-2xl text-xs font-bold ${userProfile.tolerance_type === 'auto' ? 'bg-neon-blue text-white' : 'glass text-stone-400'}`}>Auto</button>
-                <button onClick={() => setUserProfile(p => ({...p, tolerance_type: 'manual'}))} className={`flex-1 py-3 rounded-2xl text-xs font-bold ${userProfile.tolerance_type === 'manual' ? 'bg-neon-blue text-white' : 'glass text-stone-400'}`}>Manual</button>
-              </div>
-              {userProfile.tolerance_type === 'manual' && <div className="flex gap-2">{(['low', 'medium', 'high'] as const).map(t => (<button key={t} onClick={() => setUserProfile(p => ({...p, manual_tolerance: t}))} className={`flex-1 py-2 rounded-xl text-[10px] font-bold uppercase ${userProfile.manual_tolerance === t ? 'bg-stone-800 text-white' : 'glass text-stone-400'}`}>{t}</button>))}</div>}
-            </div>
-            <button onClick={handleLogout} className="w-full p-4 glass rounded-2xl text-red-500 font-bold flex items-center justify-center gap-2"><LogOut className="w-5 h-5" /> Sign Out</button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="fixed bottom-6 left-6 right-6 p-4 glass rounded-[2.5rem] border border-stone-200 z-40 shadow-2xl max-w-md mx-auto">
-        <div className="flex justify-between items-center mb-3">
-          <div className="flex gap-4">
-            <div className="text-center"><p className="text-lg font-bold leading-none">{tonightStats.count}</p><p className="text-[8px] text-stone-400 font-bold uppercase">Drinks</p></div>
-            <div className="text-center"><p className="text-lg font-bold leading-none text-neon-blue">{tonightStats.bac}</p><p className="text-[8px] text-stone-400 font-bold uppercase">BAC</p></div>
-          </div>
-          <p className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tonightStats.status === 'Sober' ? 'bg-neon-green/10 text-neon-green' : 'bg-neon-pink/10 text-neon-pink'}`}>{tonightStats.status}</p>
-        </div>
-        <div className="h-1.5 w-full bg-stone-100 rounded-full overflow-hidden mb-4 relative">
-          <div className="absolute top-0 bottom-0 w-px bg-stone-300 z-10" style={{ left: `${(tonightStats.t_tipsy / (tonightStats.t_wasted * 1.2)) * 100}%` }} />
-          <div className="h-full bg-neon-blue transition-all duration-1000" style={{ width: `${Math.min(100, (parseFloat(tonightStats.bac) / (tonightStats.t_wasted * 1.2)) * 100)}%` }} />
-        </div>
-        <div className="flex justify-around items-center pt-2">
-          <button onClick={() => setActiveTab('home')} className={`flex items-center gap-2 transition-colors ${activeTab === 'home' ? 'text-neon-blue' : 'text-stone-300'}`}><Home className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Home</span></button>
-          <button onClick={() => setActiveTab('timeline')} className={`flex items-center gap-2 transition-colors ${activeTab === 'timeline' ? 'text-neon-blue' : 'text-stone-300'}`}><History className="w-5 h-5" /><span className="text-[10px] font-bold uppercase">Diary</span></button>
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {showSelfieModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm">
-            <motion.div initial={{ y: 100, scale: 0.95 }} animate={{ y: 0, scale: 1 }} exit={{ y: 100 }} className="glass w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-6 relative shadow-2xl">
-              <button onClick={closeSelfieModal} className="absolute right-5 top-5 w-9 h-9 rounded-full glass flex items-center justify-center text-stone-400"><X className="w-4 h-4" /></button>
-              <div className="text-center mb-5">
-                <div className="text-4xl mb-2">🥴</div>
-                <h2 className="text-xl font-black">You're Wasted!</h2>
-                <p className="text-stone-400 text-sm mt-1">Capture this legendary moment 📸</p>
-              </div>
-              {!selfieCapturing && !selfiePreview && (
-                <button onClick={startCamera} className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2 shadow-lg" style={{ background: '#e87c3a' }}>
-                  <Camera className="w-5 h-5" /> Open Camera
-                </button>
-              )}
-              {selfieCapturing && (
-                <div className="space-y-3">
-                  <div className="rounded-2xl overflow-hidden bg-stone-100 aspect-[4/3]">
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                  </div>
-                  <button onClick={takeSelfie} className="w-full py-4 rounded-2xl font-bold text-white flex items-center justify-center gap-2" style={{ background: '#e87c3a' }}>
-                    📸 Snap!
-                  </button>
-                </div>
-              )}
-              {selfiePreview && (
-                <div className="space-y-3">
-                  <div className="rounded-2xl overflow-hidden">
-                    <img src={selfiePreview} alt="preview" className="w-full object-cover rounded-2xl" />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={startCamera} className="flex-1 py-3 rounded-2xl font-bold glass text-stone-500">Retake</button>
-                    <button onClick={saveSelfie} disabled={selfieUploading} className="flex-1 py-3 rounded-2xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-60" style={{ background: '#e87c3a' }}>
-                      {selfieUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : '💾 Save'}
-                    </button>
-                  </div>
-                </div>
-              )}
-              <canvas ref={canvasRef} className="hidden" />
-              <button onClick={closeSelfieModal} className="w-full mt-3 py-3 text-stone-400 text-sm font-medium">Skip for now</button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>{toasts.map(t => <Toast key={t.id} message={t.message} onComplete={() => setToasts(p => p.filter(x => x.id !== t.id))} />)}</AnimatePresence>
-
-      <AnimatePresence>
-        {showAddModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-stone-900/40 backdrop-blur-sm">
-            <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} className="glass w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 relative shadow-2xl">
-              <button onClick={() => setShowAddModal(false)} className="absolute right-6 top-6 w-10 h-10 rounded-full glass flex items-center justify-center text-stone-400"><X /></button>
-              <h2 className="text-2xl font-bold mb-6">New Drink</h2>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const fd = new FormData(e.currentTarget);
-                const newDrink: Drink = {
-                  id: generateId(), name: fd.get('name') as string, abv: +fd.get('abv')!, volume_ml: +fd.get('volume')!,
-                  alcohol_ml: (+fd.get('volume')! * +fd.get('abv')!) / 100, category: fd.get('category') as any,
-                  icon: (fd.get('icon') as string) || '🍹', is_favorite: false, is_pinned: false, is_custom: true,
-                };
-                setDrinks(p => [...p, newDrink]); setShowAddModal(false);
-              }} className="space-y-4">
-                <input name="name" placeholder="Drink Name" required className="w-full glass rounded-2xl p-4 outline-none" />
-                <div className="grid grid-cols-2 gap-4">
-                  <input name="abv" type="number" step="0.1" placeholder="ABV %" required className="w-full glass rounded-2xl p-4 outline-none" />
-                  <input name="volume" type="number" placeholder="Volume ml" required className="w-full glass rounded-2xl p-4 outline-none" />
-                </div>
-                <select name="category" className="w-full glass rounded-2xl p-4 outline-none">{CATEGORIES.filter(c=>c!=='All' && c!=='My Drinks').map(c=>(<option key={c} value={c}>{c}</option>))}</select>
-                <input name="icon" placeholder="Emoji Icon (Optional)" className="w-full glass rounded-2xl p-4 outline-none" />
-                <button type="submit" className="w-full bg-neon-blue text-white font-bold py-4 rounded-2xl shadow-lg">Create</button>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+      <AnimatePresence mode​​​​​​​​​​​​​​​​
